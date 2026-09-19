@@ -12,10 +12,25 @@ import {
   FileSpreadsheet,
   X,
   Check,
+  Flame,
+  Target,
+  Calendar,
+  TrendingUp,
 } from "lucide-react";
+import {
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import useAuthStore from "../../authStore";
 import ActivityDrawer from "../../components/ActivityDrawer";
-
 
 export default function Dashboard() {
   const router = useRouter();
@@ -28,7 +43,9 @@ export default function Dashboard() {
     token,
     fetchActivities,
   } = useAuthStore();
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+
+  const API_URL =
+    process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [currentMonth, setCurrentMonth] = useState("");
@@ -45,6 +62,11 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
   const [quickEnd, setQuickEnd] = useState("");
   const [quickError, setQuickError] = useState("");
   const [quickAdding, setQuickAdding] = useState(false);
+
+  // Stats from API
+  const [stats, setStats] = useState(null);
+  const [trend, setTrend] = useState([]);
+  const [insights, setInsights] = useState([]);
 
   const today = new Date();
 
@@ -83,8 +105,35 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
     }
   };
 
+  const fetchAnalytics = async () => {
+    if (!token) return;
+    const headers = { Authorization: `Bearer ${token}` };
+    try {
+      const [statsRes, trendRes, insightsRes] = await Promise.all([
+        fetch(`${API_URL}/activities/stats`, { headers }),
+        fetch(`${API_URL}/activities/trend?days=30`, { headers }),
+        fetch(`${API_URL}/activities/insights`, { headers }),
+      ]);
+
+      const [statsData, trendData, insightsData] = await Promise.all([
+        statsRes.json(),
+        trendRes.json(),
+        insightsRes.json(),
+      ]);
+
+      if (statsData.success) setStats(statsData.stats);
+      if (trendData.success) setTrend(trendData.trend || []);
+      if (insightsData.success) setInsights(insightsData.insights || []);
+    } catch (err) {
+      console.error("Analytics fetch error:", err);
+    }
+  };
+
   useEffect(() => {
-    if (user && token) fetchTodayActivities();
+    if (user && token) {
+      fetchTodayActivities();
+      fetchAnalytics();
+    }
   }, [user, token]);
 
   // =====================
@@ -171,7 +220,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
   };
 
   // =====================
-  // QUICK ADD (inline, now with time)
+  // QUICK ADD
   // =====================
   const handleQuickAdd = async () => {
     setQuickError("");
@@ -216,9 +265,13 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
   // NAVIGATION
   // =====================
   const goToPrevMonth = () =>
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+    setCurrentDate(
+      new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)
+    );
   const goToNextMonth = () =>
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+    setCurrentDate(
+      new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1)
+    );
   const goToCurrentMonth = () => setCurrentDate(new Date());
 
   // =====================
@@ -230,7 +283,11 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
     dayIndex + 1 === today.getDate();
 
   const isPastDate = (dayIndex) => {
-    const d = new Date(currentDate.getFullYear(), currentDate.getMonth(), dayIndex + 1);
+    const d = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth(),
+      dayIndex + 1
+    );
     d.setHours(0, 0, 0, 0);
     const tm = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     tm.setHours(0, 0, 0, 0);
@@ -238,7 +295,11 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
   };
 
   const isFutureDate = (dayIndex) => {
-    const d = new Date(currentDate.getFullYear(), currentDate.getMonth(), dayIndex + 1);
+    const d = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth(),
+      dayIndex + 1
+    );
     d.setHours(0, 0, 0, 0);
     const tm = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     tm.setHours(0, 0, 0, 0);
@@ -262,6 +323,9 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
       return next;
     });
     toggleActivity(activityId);
+
+    // Refresh analytics after toggle so charts update
+    setTimeout(() => fetchAnalytics(), 500);
   };
 
   // =====================
@@ -277,12 +341,17 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
   };
 
   const getTimeOfDay = (time) => {
-    if (!time) return { icon: <Clock className="w-3 h-3" />, color: "text-gray-400" };
+    if (!time)
+      return { icon: <Clock className="w-3 h-3" />, color: "text-gray-400" };
     const hour = parseInt(time.split(":")[0]);
-    if (hour < 6) return { icon: <Moon className="w-3 h-3" />, color: "text-indigo-500" };
-    if (hour < 12) return { icon: <Sunrise className="w-3 h-3" />, color: "text-orange-500" };
-    if (hour < 17) return { icon: <Sun className="w-3 h-3" />, color: "text-yellow-500" };
-    if (hour < 20) return { icon: <Sunset className="w-3 h-3" />, color: "text-pink-500" };
+    if (hour < 6)
+      return { icon: <Moon className="w-3 h-3" />, color: "text-indigo-500" };
+    if (hour < 12)
+      return { icon: <Sunrise className="w-3 h-3" />, color: "text-orange-500" };
+    if (hour < 17)
+      return { icon: <Sun className="w-3 h-3" />, color: "text-yellow-500" };
+    if (hour < 20)
+      return { icon: <Sunset className="w-3 h-3" />, color: "text-pink-500" };
     return { icon: <Moon className="w-3 h-3" />, color: "text-blue-500" };
   };
 
@@ -294,10 +363,35 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
     return [...list].sort((a, b) => {
       if (a.startTime && !b.startTime) return -1;
       if (!a.startTime && b.startTime) return 1;
-      if (a.startTime && b.startTime) return a.startTime.localeCompare(b.startTime);
+      if (a.startTime && b.startTime)
+        return a.startTime.localeCompare(b.startTime);
       return (a.order || 0) - (b.order || 0);
     });
   }, [activities]);
+
+  // =====================
+  // CHART DATA
+  // =====================
+  const trendChartData = useMemo(
+    () =>
+      trend.map((d) => ({
+        date: new Date(d.date).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        }),
+        percentage: d.percentage,
+      })),
+    [trend]
+  );
+
+  const insightsChartData = useMemo(
+    () =>
+      insights.slice(0, 8).map((a) => ({
+        name: a.name.length > 20 ? a.name.substring(0, 20) + "…" : a.name,
+        percentage: a.percentage,
+      })),
+    [insights]
+  );
 
   if (isLoading || !user) {
     return (
@@ -330,34 +424,15 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
     weekStart = weekEnd + 1;
   }
 
-  const weeklyProgress = weeks.map((week) => {
-    let completed = 0;
-    if (sortedActivities.length === 0) return { ...week, completed };
-    for (let i = week.start; i < week.end; i++) {
-      const allCompleted = sortedActivities.every((a) => dayLogs[`${a.id}-day-${i}`]);
-      if (allCompleted) completed++;
-    }
-    return { ...week, completed };
-  });
-
-  const monthlyTotalDays = daysInMonth;
-  let monthlyCompletedDays = 0;
-  if (sortedActivities.length > 0) {
-    for (let i = 0; i < daysInMonth; i++) {
-      const allCompleted = sortedActivities.every((a) => dayLogs[`${a.id}-day-${i}`]);
-      if (allCompleted) monthlyCompletedDays++;
-    }
-  }
-
   const isCurrentMonth =
     currentDate.getMonth() === new Date().getMonth() &&
     currentDate.getFullYear() === new Date().getFullYear();
 
   return (
-    <div className=" p:2 lg:p-2">
-      <div className="max-w-full mx-auto">
+    <div className="p-2 lg:p-2">
+      <div className="max-w-full mx-auto space-y-2">
         {/* TOP BAR */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-3 mb-2 border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-3 border border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <button
@@ -404,12 +479,11 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
           </div>
         </div>
 
-        {/* TABLE */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden mb-4">
+        {/* ACTIVITY TABLE */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm">
               <thead>
-                {/* ROW 1 — day numbers */}
                 <tr className="bg-gray-50 dark:bg-gray-700/50">
                   <th className="px-2 py-2 text-left text-xs font-bold text-gray-600 dark:text-gray-300 uppercase border-r border-gray-200 dark:border-gray-700 sticky left-0 bg-gray-50 dark:bg-gray-900 z-20 min-w-[180px]">
                     ACTIVITY
@@ -420,7 +494,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
                     const isFuture = isFutureDate(i);
 
                     if (isToday) {
-                      // ===== ENHANCED TODAY HEADER =====
                       return (
                         <th
                           key={`day-${i}`}
@@ -457,7 +530,6 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
                     );
                   })}
                 </tr>
-                {/* ROW 2 — week labels */}
                 <tr className="bg-gray-100 dark:bg-gray-700/30">
                   <th className="px-2 py-1 text-left text-[10px] font-bold text-gray-500 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700 sticky left-0 bg-gray-100 dark:bg-gray-900 z-20">
                     Week
@@ -476,7 +548,10 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
               <tbody>
                 {sortedActivities.length === 0 ? (
                   <tr>
-                    <td colSpan={daysInMonth + 1} className="px-4 py-16 text-center">
+                    <td
+                      colSpan={daysInMonth + 1}
+                      className="px-4 py-16 text-center"
+                    >
                       <div className="flex flex-col items-center gap-3">
                         <div className="text-5xl">📋</div>
                         <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -548,20 +623,17 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
                           const isToday = isTodayDate(i);
                           const canToggle = isToday && canComplete;
 
-                          // ===== CELL CLASSES =====
                           let cellClass =
                             "px-1 py-1 text-center border-r border-gray-100 dark:border-gray-700 transition-all duration-150";
 
                           if (isChecked) {
-                            // STRONGER GREEN
                             cellClass +=
                               " bg-emerald-100 dark:bg-emerald-900/40 ring-1 ring-emerald-300 dark:ring-emerald-700 ring-inset";
                           } else if (isToday && canComplete) {
                             cellClass +=
                               " bg-blue-50 dark:bg-blue-900/15 hover:bg-emerald-50 dark:hover:bg-emerald-900/25";
                           } else if (isPast) {
-                            cellClass +=
-                              " bg-gray-50 dark:bg-gray-800/50";
+                            cellClass += " bg-gray-50 dark:bg-gray-800/50";
                           }
 
                           if (canToggle) {
@@ -579,7 +651,9 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
                             <td
                               key={i}
                               className={cellClass}
-                              onClick={() => handleDayToggle(activity.id, i)}
+                              onClick={() =>
+                                handleDayToggle(activity.id, i)
+                              }
                             >
                               <span
                                 className={`text-lg inline-block transition-transform ${
@@ -596,9 +670,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
                   })
                 )}
 
-                {/* =====================
-                    INLINE QUICK-ADD ROW
-                ===================== */}
+                {/* INLINE QUICK-ADD ROW */}
                 <tr className="border-t border-gray-200 dark:border-gray-700">
                   <td
                     colSpan={daysInMonth + 1}
@@ -611,7 +683,9 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
                             type="text"
                             value={quickName}
                             onChange={(e) => setQuickName(e.target.value)}
-                            onKeyDown={(e) => e.key === "Enter" && handleQuickAdd()}
+                            onKeyDown={(e) =>
+                              e.key === "Enter" && handleQuickAdd()
+                            }
                             placeholder="Activity name..."
                             autoFocus
                             className="min-w-[180px] px-3 py-2 text-xs border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
@@ -653,10 +727,13 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
                           </button>
                         </div>
                         {quickError && (
-                          <p className="text-[11px] text-red-500 px-1">{quickError}</p>
+                          <p className="text-[11px] text-red-500 px-1">
+                            {quickError}
+                          </p>
                         )}
                         <p className="text-[10px] text-gray-400 px-1">
-                          Time is optional. Leave blank to add without a time slot.
+                          Time is optional. Leave blank to add without a time
+                          slot.
                         </p>
                       </div>
                     ) : (
@@ -684,116 +761,202 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
           </div>
         </div>
 
-        {/* Legend */}
-        <div className="flex flex-wrap items-center gap-4 mb-4 text-xs">
-          <div className="flex items-center gap-1.5">
-            <span className="w-4 h-4 bg-emerald-100 dark:bg-emerald-900/40 border border-emerald-300 dark:border-emerald-700 rounded"></span>
-            <span className="text-gray-600 dark:text-gray-400">Completed</span>
+        {/* ============================================
+            COMPACT STAT CHIPS ROW
+        ============================================ */}
+        {stats && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+            <StatChip
+              icon={<Flame className="w-4 h-4 text-orange-500" />}
+              label="Current Streak"
+              value={`${stats.currentStreak || 0} day${
+                stats.currentStreak === 1 ? "" : "s"
+              }`}
+              sub={`Best: ${stats.bestStreak || 0}`}
+            />
+            <StatChip
+              icon={<Target className="w-4 h-4 text-emerald-500" />}
+              label="Completion Rate"
+              value={`${stats.completionRate || 0}%`}
+              sub="This month"
+              progress={stats.completionRate || 0}
+              progressColor="bg-emerald-500"
+            />
+            <StatChip
+              icon={<Calendar className="w-4 h-4 text-blue-500" />}
+              label="Tracked Days"
+              value={`${stats.trackedDays || 0} / ${stats.totalDays || 30}`}
+              sub="This month"
+              progress={
+                stats.totalDays > 0
+                  ? (stats.trackedDays / stats.totalDays) * 100
+                  : 0
+              }
+              progressColor="bg-blue-500"
+            />
+            <StatChip
+              icon={<TrendingUp className="w-4 h-4 text-violet-500" />}
+              label="Activities"
+              value={stats.activitiesCount || 0}
+              sub="Tracked daily"
+            />
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-4 h-4 bg-blue-500 rounded shadow-sm"></span>
-            <span className="text-gray-600 dark:text-gray-400">Today (clickable)</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-4 h-4 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded"></span>
-            <span className="text-gray-400">Past (locked)</span>
-          </div>
-          {!canComplete && (
-            <div className="flex items-center gap-1.5 text-red-500">
-              <span className="w-4 h-4 bg-red-50 dark:bg-red-900/20 border border-red-400 rounded"></span>
-              <span>⏰ Time&apos;s up!</span>
-            </div>
-          )}
-        </div>
+        )}
 
-        {/* Weekly Progress */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-4">
-          {weeklyProgress.map((week, index) => (
-            <div
-              key={index}
-              className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-3 border border-gray-200 dark:border-gray-700 text-center"
-            >
-              <p className="text-xs font-bold text-gray-600 dark:text-gray-400">
-                {week.label}
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">{week.days}</p>
-              <p className="text-xl font-bold text-gray-900 dark:text-white mt-1">
-                {week.completed}{" "}
-                <span className="text-sm font-normal text-gray-400">/ {week.total}</span>
-              </p>
-              <div className="mt-1 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-                <div
-                  className="bg-blue-600 h-1.5 rounded-full transition-all duration-500"
-                  style={{ width: `${(week.completed / week.total) * 100}%` }}
-                ></div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Monthly Consistency */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 mb-4 border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-4">
-            <div className="text-center">
-              <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                {monthlyCompletedDays}
-                <span className="text-base font-normal text-gray-400 dark:text-gray-500">
-                  {" "}
-                  / {monthlyTotalDays}
-                </span>
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Days Complete This Month
-              </p>
-            </div>
-            <div className="flex-1">
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
-                <div
-                  className="bg-gradient-to-r from-blue-500 to-indigo-600 h-3 rounded-full transition-all duration-500"
-                  style={{
-                    width: `${
-                      monthlyTotalDays > 0
-                        ? (monthlyCompletedDays / monthlyTotalDays) * 100
-                        : 0
-                    }%`,
-                  }}
-                ></div>
-              </div>
-              <p className="text-sm font-medium text-green-600 dark:text-green-400 mt-1">
-                {monthlyCompletedDays === 0
-                  ? `Start your ${currentMonth} journey today!`
-                  : `Keep going! You're doing great in ${currentMonth}.`}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Notes & Reflection */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 border border-gray-200 dark:border-gray-700">
-          <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-3">
-            NOTES & REFLECTION
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[
-              { emoji: "💡", line1: "Small steps", line2: "make big changes" },
-              { emoji: "✨", line1: "Be consistent", line2: "Build good habits" },
-              { emoji: "🌟", line1: "Create", line2: "The life you want" },
-              { emoji: "📈", line1: "Track", line2: "Your progress daily" },
-            ].map((n, i) => (
-              <div
-                key={i}
-                className="p-2 bg-gray-50 dark:bg-gray-700/30 rounded-lg text-center"
-              >
-                <p className="text-xs text-gray-700 dark:text-gray-300">
-                  {n.emoji} {n.line1}
-                </p>
-                <p className="text-[10px] text-gray-500 dark:text-gray-400">
-                  {n.line2}
+        {/* ============================================
+            ACTIVITY PERFORMANCE CHART
+        ============================================ */}
+        {insightsChartData.length > 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  🎯 Activity Performance
+                </h3>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                  Completion rate per activity
                 </p>
               </div>
-            ))}
+            </div>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={insightsChartData}
+                  layout="vertical"
+                  margin={{ left: 20, right: 30, top: 5, bottom: 5 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="#e5e7eb"
+                    className="dark:opacity-20"
+                    horizontal={false}
+                  />
+                  <XAxis
+                    type="number"
+                    domain={[0, 100]}
+                    tickFormatter={(v) => `${v}%`}
+                    tick={{ fontSize: 10 }}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    tick={{ fontSize: 10 }}
+                    tickLine={false}
+                    axisLine={false}
+                    width={140}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "#1f2937",
+                      border: "none",
+                      borderRadius: 8,
+                      color: "white",
+                      fontSize: 12,
+                    }}
+                    formatter={(value) => [`${value}%`, "Completion"]}
+                  />
+                  <Bar dataKey="percentage" radius={[0, 6, 6, 0]}>
+                    {insightsChartData.map((entry, index) => (
+                      <Cell
+                        key={index}
+                        fill={
+                          entry.percentage >= 80
+                            ? "#10b981"
+                            : entry.percentage >= 50
+                            ? "#f59e0b"
+                            : "#ef4444"
+                        }
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* ============================================
+            30-DAY TREND CHART
+        ============================================ */}
+        {trendChartData.length > 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  📈 30-Day Trend
+                </h3>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                  Daily completion percentage
+                </p>
+              </div>
+            </div>
+            <div className="h-52">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={trendChartData}>
+                  <defs>
+                    <linearGradient
+                      id="colorPct"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop
+                        offset="5%"
+                        stopColor="#8b5cf6"
+                        stopOpacity={0.4}
+                      />
+                      <stop
+                        offset="95%"
+                        stopColor="#8b5cf6"
+                        stopOpacity={0}
+                      />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="#e5e7eb"
+                    className="dark:opacity-20"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 10 }}
+                    tickLine={false}
+                    axisLine={false}
+                    interval={Math.floor(trendChartData.length / 8)}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 10 }}
+                    tickLine={false}
+                    axisLine={false}
+                    domain={[0, 100]}
+                    tickFormatter={(v) => `${v}%`}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "#1f2937",
+                      border: "none",
+                      borderRadius: 8,
+                      color: "white",
+                      fontSize: 12,
+                    }}
+                    formatter={(value) => [`${value}%`, "Completion"]}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="percentage"
+                    stroke="#8b5cf6"
+                    strokeWidth={2}
+                    fill="url(#colorPct)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* DRAWER */}
@@ -810,6 +973,42 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
         timeRemaining={timeRemaining}
         token={token}
       />
+    </div>
+  );
+}
+
+// ================================
+// STAT CHIP COMPONENT
+// ================================
+function StatChip({ icon, label, value, sub, progress, progressColor }) {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 px-3 py-2.5">
+      <div className="flex items-center gap-2">
+        <div className="flex-shrink-0">{icon}</div>
+        <p className="text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide truncate">
+          {label}
+        </p>
+      </div>
+      <div className="mt-1.5 flex items-baseline gap-1.5">
+        <span className="text-lg font-bold text-gray-900 dark:text-white">
+          {value}
+        </span>
+      </div>
+      {progress !== undefined && (
+        <div className="mt-1 w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1">
+          <div
+            className={`h-1 rounded-full transition-all ${
+              progressColor || "bg-violet-500"
+            }`}
+            style={{ width: `${Math.min(progress, 100)}%` }}
+          ></div>
+        </div>
+      )}
+      {sub && (
+        <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
+          {sub}
+        </p>
+      )}
     </div>
   );
 }
